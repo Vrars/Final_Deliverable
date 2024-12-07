@@ -1,0 +1,218 @@
+---
+title: "Quentin Tarantino Movies"
+author: "Caroline Hartley, Philipp Kouterguine"
+date: "2024-11-11"
+output: html_document
+---
+## Libraries
+```{r}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+install.packages("wordcloud")
+library(wordcloud)
+install.packages("RColorBrewer")
+library(RColorBrewer)
+install.packages("tm")
+library(tm)
+```
+## Summary
+In this project, we explored the frequency of slurs and deaths in films produced by Quentin Tarantino. We compared the total number of deaths and slurs per movie, calculated their combined counts, and examined the amount each swear word was used. Then, using data visualization, we highlighted any key patterns and trends trends like changes in frequency of occurring events throughout the course of each film. Throughout the process, we explored data manipulation and visualization techniques in R to ensure consistently accurate data. 
+
+##Purpose 
+
+The primary goal of our project was to analyze all death scenes and instances of characters swearing in Quentin Tarantino's movies. A benefit of this is giving parents and organizations a clearer understanding of the films more mature content. Without prior knowledge, viewers might not know whether or not a movie contains slurs, how frequently they occur, or the extent of violent deaths known. Our database of of death sand swear words address this gap by ranking Tarantino's films based on their combined counts of slurs and deaths. 
+
+Additionally, we were able to explore our interests in films and cinema while deepening our proficiency in R. To showcase our findings, we created a variety of plots and other visualizations. They are shown in the document below. 
+
+## Data
+### Dictionary
+
+- **Movie: ** The Movie variable describes what movie an event came from. It is a categorical variable. This variable is important to the rest of the data because it is what connects the other variables. 
+
+- **Type: ** The Type variable is a categorical variable that describes whether the event taking place is a swear word or a death. 
+
+- **Word: ** The Word variable is a categorical variable that tells the swear word said if the event was a swear word. If the event was a death and not a word, the space is left blank. 
+
+- **Minutes_in: ** The variable Minutes_in is a numerical variable. It list the time stamp in the movie that the event took place in the format "minutes.seconds." 
+
+### Summary Statistics
+```{r}
+tarantino <- read.csv("tarantino.csv")
+view(tarantino)
+```
+
+```{r}
+summary(tarantino)
+```
+The most information we can gather from the initial summary is from the minutes_in variable, which will be explored more below. 
+
+### NAs
+There are empty cells in this data. The sum(is.na()) function shows 0 NAs, but this data has empty cells. The empty cells happen in the Word variable whenever it lines up with a death in the Type variable. Looking at the amount of deaths shown in the Type section above, we can determine that there is 190 empty spaces in the data. Because this projects specific explorations are unaffected by these blank spaces, we have not moved to replace them.
+
+##Exploratory Data Analysis
+### Movie 
+
+```{r}
+movie_count <- tarantino %>% 
+  count(movie)
+print(movie_count)
+```
+
+```{r}
+movie_count <- movie_count %>% 
+  mutate(wrapped = str_wrap(movie, width = 10))
+
+ggplot(movie_count, aes(x = wrapped, y = n)) + 
+  geom_bar(stat = "identity") + 
+  labs(x = "Movie", y = "Movie Count")
+```
+
+The table and bar chart above show the amount of times a certain movie is listed throughout the data set. Pulp Fiction had the most amount of events, followed by Reservoir Dogs. The movie with the least amount of events, swear words, or deaths, is Kill Bill Vol. 2. The 'n' column in the table represents the 'Movie Count' y-variable in the bar chart. 
+
+### Type
+
+```{r}
+type_count <- tarantino %>% 
+  count(type)
+print(type_count)
+```
+
+```{r}
+ggplot(type_count, aes(x = type, y = n)) + 
+  geom_bar(stat = "identity") + 
+  labs(x = "Type", y = "Type Count")
+```
+
+The table and bar chart above show the differences in amount of deaths in movies and the amount of swears said in movies. 
+
+```{r}
+type_count2 <- tarantino %>%
+  count(movie, type)%>%
+  mutate(movie_wrap = str_wrap(movie, width = 8))
+print(type_count2)
+```
+
+
+```{r}
+
+ggplot(type_count2, aes(x = movie_wrap, y = n, fill = type)) +
+  geom_bar(stat = "identity", position = "dodge") + 
+  labs(x = "Movie", y = "Count", fill = "Event Type")+
+  scale_fill_manual(values = c("death" = "darkred", "word" = "salmon"))
+```
+This bar chart represents the amount of death and swear word occurrences that happened in each movie. In most movies, there are much more swear word occurrences than there is deaths. 
+Outliers of this norm include Inglorious Bastards and Kill Bill: Vol. 1. 
+
+### Word
+```{r}
+word_count <- tarantino %>% 
+  count(word)
+print(word_count)
+```
+
+**Data Cleanliness** 
+
+This table represents the amount of times each swear word is said throughout all of the movies. One thing that we noticed with this variable is that it is unorganized. It would be easier to understand the data given if it wasn't so specific - many of the words are separated into present, past, and plural versions of themselves when they all mean the same thing in this scenario. To change this would streamline the data much more. 
+
+```{r}
+text <- tarantino$word #First we make sure that the vector with all the words is being manipulated with.
+tarantino_corpus <- Corpus(VectorSource(text)) #With that vector, we create a corpus. Why? Because it's easy.
+#According to many sources, it's an easy way to manipulate copious amounts of text data.
+tarantino_corpus <- tm_map(tarantino_corpus, content_transformer(tolower))
+tarantino_corpus <- tm_map(tarantino_corpus, removePunctuation)
+tarantino_corpus <- tm_map(tarantino_corpus, removeNumbers)
+tarantino_corpus <- tm_map(tarantino_corpus, removeWords, stopwords("en"))
+tarantino_corpus <- tm_map(tarantino_corpus, stripWhitespace)
+
+#We change it all up a bit, make the text lowercase, remove punctuation etc. Simply cleaning it all up.
+
+tarantino_tdm <- TermDocumentMatrix(tarantino_corpus) #Turn it into a giant matrix. 
+#A matrix is just like a dataframe, but it can only store 1 data type. In our case, it would be characters.
+matrix <- as.matrix(tarantino_tdm)
+word_freqs <- sort(rowSums(matrix), decreasing = TRUE) #For each word, we sum up all of the instances, and then make it in the decreasing order, with the sort() function. 
+
+word_data <- data.frame ( #Turn it into a data frame by combining the matrix with the word frequency list.
+  word = names(word_freqs),
+  freq = word_freqs
+)
+
+set.seed(1234) #And finally, we do the wordcloud. 
+wordcloud(words = word_data$word, freq = word_data$freq, min.freq = 1, 
+          max.words = 100, random.order = FALSE, rot.per = 0.35, 
+          colors = brewer.pal(8, "Dark2"))
+```
+
+We've been working on some new cool features that haven't been studied in class yet, such as the word cloud. It's a ball of words, and the more frequent the words are in the dataset, the bigger they get. 
+
+First, just like a chef preparing a dish, we need to prepare our own ingredients. They include these 3 distinct packages that will help us with this little endeavor. The first one is called the worldcloud. It's a package with a lot of fancy visuals for text, including the wordcloud. The tm package, aka the "Text Mining" package, is used to mainly mess around with text. It's essential to filter out words, remove characters and punctuations, but most importantly, it's used for creating a special thing - the corpus, which is similar to a data frame. Last, but not least, the RColorBrewer package. If R is a canvas upon which we draw a painting (the code), the RColorBrewer package would be the watercolor, or crayons, or gouache with which we draw. It's purpose is to enhance the visuals of the data. 
+But it works!!! As we can see, at the time of death, the word "Fucking" was the most frequent one, as it's the biggest in that wordcloud. Other bad words, such as the N word, fuck, goddamn, ass, bitch, motherfucker get said rather frequently, such that they get their own fancy color, and a bigger size. 
+
+
+### Minutes_in 
+
+```{r}
+hist(tarantino$minutes_in, main = "Frequency of Time Stamps", xlab = "Minutes In")
+```
+The time stamps listed in this histogram are of every death and swear word in every movie. The histogram shows the frequency of around how long into each movie the time stamp took place. It shows us that the majority of the events happen at the beginning of each movie, even if they do remain relatively high in occurrence for the rest of the movie as well. 
+
+
+### Movie Length
+
+```{r}
+movie_length_minutes <- data.frame(
+  movie = c("Reservoir Dogs", "Pulp Fiction", "Kill Bill: Vol. 1", "Kill Bill: Vol. 2", 
+            "Inglorious Basterds", "Django Unchained", "Jackie Brown"),  
+  length = c(99, 149, 111, 137, 153, 165, 160)
+)
+
+new_movie <- data.frame(
+  movie = c("Reservoir Dogs", "Pulp Fiction", "Django Unchained", "Pulp Fiction", "Reservoir Dogs"),
+  word = c("dick", "fucked", "shit", "bullshit", "dick"),
+  time = c(0.40, 0.61, 1.43, 0.90, 1.75)
+)
+
+new_movie <- merge(new_movie, movie_length_minutes, by = "movie", all.x = TRUE)
+
+new_movie$hours <- floor(new_movie$length / 60)
+new_movie$minutes <- round(new_movie$length %% 60)
+
+new_movie$duration <- paste(new_movie$hours, "hr", new_movie$minutes, "min")
+
+
+```
+
+```{r}
+display <- new_movie %>%
+  select(movie, duration)
+display
+```
+
+### Further Details on Our Data 
+
+**Data Dimensions: ** Our data has four variables and 1894 rows. 
+
+As stated above, the main concern when looking at the cleanliness of our data set lays in the Word variable because of its inconsistency and blank spaces. Our second biggest worry would be minutes_in. This is because the amount of minutes in means different things for each movie. In a longer movie, 50 minutes in may be the first plot point. In a shorter movie, it may be almost completed. We have little room to fully compare the time stamps given because of this. 
+
+
+### Results 
+We found that Pulp Fiction contains the highest combined counts of slurs and deaths among the films that Quentin Tarantino produced, followed most closely by Reservoir Dogs and Jackie Brown. Pulp Fiction accounts for 450 combined instances, while Kill Bill: Vol. 2 had fewer than 100 instances, making it the least intense film. Something that is also notable is that slurs happen much more frequently in these films than deaths do. Deaths constitute only around 10% of the total instances, while slurs constitute 89.97% of instances. 
+
+Throughout all the movies, Pulp Fiction had the most disparity between deaths and words was the most pronounced, where there are 7 deaths compared to 469 slurs. The pn;y film where the amount of deaths outnumber swears said is Kill Bill: Vol. 1, with 63 deaths and 57 swears. Additionally, Jackie Brown has the fewest deaths, at only 4, and Kill Bill: Vol. 1 features the lowest number of slurs. 
+
+"Fucking" is the swear that is most recently used, followed by the "n-word," and then by "bitch. " 
+
+Interestingly, the frequency of slurs and deaths is typically highest towards the beginning of the movie, and decreases as the narrative progresses. This could be coincidental, or it could be a way to hook watchers interest. It could also be because at the end, plot lines are being wrapped up so less deaths need to happen.
+
+### Conclusion 
+
+This study was limited by its focus on predefined counts, and a lack of context on audience perceptions. We don't know why people were swearing or what lead to characters deaths. We could expand our data set using this information, as we did when we added total run times. As discussed above, we could also work to futher visualize word use. 
+
+### References 
+
+(PSDS) “Programming Skills for Data Science: Start Writing Code to Wrangle, Analyze, and Visualize Data with R”. Freeman and Ross
+
+“How to Detect Whitespace and Null Value Placeholders.” Dqops.com, 2024, dqops.com/docs/categories-of-data-quality-checks/how-to-detect-blank-and-whitespace-values/. Accessed 25 Nov. 2024.

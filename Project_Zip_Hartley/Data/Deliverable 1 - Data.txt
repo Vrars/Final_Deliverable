@@ -1,0 +1,4 @@
+﻿https://github.com/fivethirtyeight/data/tree/master/tarantino 
+
+
+There are four variables and 1895 observations. This data highlights each time a character either swore or died in a Quentin Tarantino movie. It highlights the film, the event, the specifics of words said, and the minutes in the movie when the event occurred.
